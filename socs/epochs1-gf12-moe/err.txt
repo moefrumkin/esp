@@ -1,0 +1,1 @@
+ERROR : Location Constraint(s) is(are) not provided for certain ports even though they are required for the selected configuration. Following are the ports missing in the provided Constraints file. \n"ddr3_addr[14]" 

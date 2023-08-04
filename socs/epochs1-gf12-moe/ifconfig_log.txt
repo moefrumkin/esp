@@ -1,0 +1,30 @@
+ttambe@ivy:/project/esp/esp/socs/epochs0-gf12-ibm-ddr-debug$ ifconfig
+eno1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 10.243.38.54  netmask 255.255.255.192  broadcast 10.243.38.63
+        inet6 fe80::7436:a6f:d6c:4db8  prefixlen 64  scopeid 0x20<link>
+        ether 0c:c4:7a:48:a0:fa  txqueuelen 1000  (Ethernet)
+        RX packets 381766  bytes 197560926 (197.5 MB)
+        RX errors 0  dropped 4  overruns 0  frame 0
+        TX packets 156469  bytes 168664282 (168.6 MB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+        device interrupt 18  memory 0xfba00000-fba20000  
+
+eno2: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.5  netmask 255.255.255.0  broadcast 192.168.1.255
+        inet6 fe80::abe5:62d1:6f2:8da6  prefixlen 64  scopeid 0x20<link>
+        ether 0c:c4:7a:48:a0:fb  txqueuelen 1000  (Ethernet)
+        RX packets 115932  bytes 9405546 (9.4 MB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 226943  bytes 232988514 (232.9 MB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+        device interrupt 19  memory 0xfb900000-fb920000  
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 1696  bytes 173374 (173.3 KB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 1696  bytes 173374 (173.3 KB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
