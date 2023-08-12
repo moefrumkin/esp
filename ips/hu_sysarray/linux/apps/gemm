@@ -1,0 +1,219 @@
+// Copyright (c) 2011-2021 Columbia University, System Level Design Group
+// SPDX-License-Identifier: Apache-2.0
+/* User-defined code */
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+#include "libsysarray.h"
+
+#define NAME "/dev/sysarray_rtl.0"
+
+#define M 32
+
+#define MAX_PRINTED_ERRORS 20
+
+const static int IsRelu = 1;
+const static int BiasShift = 6;
+const static int AccumShift = 10;
+const static int AccumMul = 93;
+
+static void init_buf(quantized *weights, quantized *inputs, quantized *outputs) {
+#include "weights.h"
+#include "inputs.h"
+#include "outputs.h"
+}
+
+static void cpu_mul(quantized *out, quantized *weights, quantized *inputs, int N0, int M, int N1);
+
+static int validate_buf(quantized *out, quantized *gold, int out_len)
+{
+    int j;
+    char val;
+    unsigned errors = 0;
+
+    for (j = 0; j < out_len; j++) {
+        val = out[j];
+        if (gold[j] != val) {
+            errors++;
+            if(errors == 1)
+                printf("# | Act | Exp\n");
+            if (errors <= MAX_PRINTED_ERRORS) {
+                printf("%d : %d : %d\n", j, val, gold[j]);
+            }
+        }
+    }
+
+    return errors;
+}
+
+static void print_start(int num, quantized *ptr) {
+    int i;
+    for(i = 0; i < num; i++) {
+        printf("arg[%d]: %d\n", i, *(ptr++));
+    }
+}
+
+int main() {
+#define SOC_TILES 36
+#define CSR_TILE_SIZE 0x200 
+#define CSR_BASE_ADDR 0x60090000
+#define SYSARRAY_TILE_NUM 19
+
+    struct sysarray_allocation *alloc;
+    int fd;
+
+    fd = open("/dev/mem", O_RDWR); 
+    void* csr_base_ptr = mmap(NULL, SOC_TILES * CSR_TILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, CSR_BASE_ADDR);
+    close(fd); 
+
+    int* coherence_reg_ptr = ((int*) csr_base_ptr) + ((CSR_TILE_SIZE * SYSARRAY_TILE_NUM + 0x190) / sizeof(int));
+    *coherence_reg_ptr = 2; 
+
+    close(fd);
+
+    printf("Testing the Systolic Array!\n");
+
+    printf("Sizeof quantization: %d\n", sizeof(quantized));
+
+    printf("Loading Driver\n");
+
+    fd = open(NAME, O_RDWR, 0);
+
+    if(fd < 0) {
+        printf("unable to open driver file\n");
+        return fd;
+    }
+
+    printf("Done!\n");
+
+    int bias_len = 10244
+    int weight_len = 1024 * 1024
+    int input_len = 11024 * 1024;
+    int output_len = 32 * 32;
+
+    int bias_offset = 0;
+    int weight_offset = bias_offset + bias_len;
+    int input_offset = weight_offset + weight_len;
+    int output_offset = input_offset + input_len;
+
+    int mem_size = output_offset + output_len;
+
+    printf("Allocating Buffer\n");
+
+    quantized* mem;
+    long address;
+
+    alloc = sysarray_alloc_buffer(fd, mem_size);
+
+    if(alloc == NULL) {
+        printf("Unable to Allocate Buffer\n");
+        return -1;
+    }
+
+    printf("Buffer Allocated At, %p physical, %p kernel, %p user\n", alloc->physical, alloc->kernel, alloc->user);
+
+    mem = (quantized*) alloc->user;
+    address = alloc->physical;
+
+    printf("Mem starts at %p\n", mem);
+
+    quantized* gold = malloc(output_len);
+
+    printf("Loading Test Data\n");
+
+    init_buf(&mem[weight_offset], &mem[input_offset], gold);
+    
+    printf("Done!\n");
+
+    printf("Testing CPU\n");
+
+    cpu_mul(&mem[output_offset], &mem[weight_offset], &mem[input_offset]);
+
+    int errors = validate_buf(&mem[output_offset], &gold);
+
+    if(errors)
+       print("Failed\n");
+    else
+       print("Passed\n"); 
+
+    return 0;
+
+
+    unsigned data = 0;
+
+    data += M - 1;
+    data += IsRelu << 8;
+    data += BiasShift << 16;
+    data += AccumShift << 20;
+    data += AccumMul << 24;
+
+    printf("Configuring Sysarray, with %x\n", data);
+
+    //ioctl(fd, SYSARRAY_SET_CONFIG, data);
+    sysarray_config(fd, data);
+
+    printf("Done!\n");
+
+    printf("Loading Weights\n");
+
+    printf("Weight base %p, Input base %p, Output base %p\n", address, address + input_offset, address + output_offset);
+
+    //ioctl(fd, SYSARRAY_LOAD_WEIGHTS, address);
+    sysarray_load_weights(fd, address);
+
+    printf("Done!\n");
+
+    printf("Loading Inputs\n");
+
+    //ioctl(fd, SYSARRAY_LOAD_INPUT, address + input_offset);
+    sysarray_load_input(fd, address + input_offset);
+
+    printf("Done!\n");
+
+    printf("Starting Sysarray\n");
+
+    //ioctl(fd, SYSARRAY_RUN_MATMUL, 0);
+    sysarray_matmul(fd);
+
+    printf("Done!\n");
+
+    printf("Saving Result\n");
+
+    //ioctl(fd, SYSARRAY_STORE_OUTPUT, address + output_offset);
+    sysarray_store_output(fd, address + output_offset);
+
+    printf("Done!\n");
+
+
+    printf("Validating Results\n");
+
+    int errors = validate_buf(&mem[output_offset], gold, output_len);
+
+    sysarray_free_buffer(fd, alloc);
+
+    if (errors)
+        printf("Test Failed\n");
+    else
+        printf("Test Passed!\n");
+
+    return 0;
+}
+
+static void cpu_mul(quantized *out, quantized *weights, quantized *inputs, int N0, int M, int N1) {
+    int i, j, k;
+    quantized acc;
+
+    for(i = 0; i < N0; i++) {
+        for(j = 0; j < N1; j++) {
+            acc = 0;
+            for(k = 0; k < M; k++) {
+                acc += weights[i * N0 + k] * inputs[k * M + j];
+            }
+            out[i * N0 + j] = acc;
+        }
+    }
+}
